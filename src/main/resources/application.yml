@@ -12,6 +12,20 @@ spring:
     gateway:
 
       routes:
+        - id: helios_pulse_openapi
+          uri: ${HELIOS_PULSE_API_URI:http://127.0.0.1:9595}
+          predicates:
+            - Path=/docs/pulse/v3/api-docs
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: helios_sentinel_openapi
+          uri: ${HELIOS_SENTINEL_API_URI:http://127.0.0.1:8080}
+          predicates:
+            - Path=/docs/sentinel/v3/api-docs
+          filters:
+            - SetPath=/v3/api-docs
+
         - id: helios_pulse_route
           uri: ${HELIOS_PULSE_API_URI:http://127.0.0.1:9595}
           predicates:
@@ -47,3 +61,16 @@ management:
   endpoint:
     health:
       show-details: never
+
+springdoc:
+  api-docs:
+    enabled: ${HELIOS_SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${HELIOS_SWAGGER_ENABLED:false}
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    urls:
+      - name: HELIOS Pulse API
+        url: /docs/pulse/v3/api-docs
+      - name: HELIOS Sentinel API
+        url: /docs/sentinel/v3/api-docs
