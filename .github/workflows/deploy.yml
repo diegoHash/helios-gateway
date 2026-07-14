@@ -1,0 +1,86 @@
+name: Deploy HELIOS Gateway to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+          cache: "gradle"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew clean test bootJar
+
+      - name: Prepare EC2 Directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST_T4G }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY_T4G }}
+          script: |
+            mkdir -p /home/ec2-user/helios-gateway
+
+      - name: Prepare HELIOS Gateway artifact
+        run: cp build/libs/helios-gateway.jar helios-gateway.jar
+
+      - name: Copy Files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST_T4G }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY_T4G }}
+          source: "helios-gateway.jar,helios-gateway.service"
+          target: "/home/ec2-user/helios-gateway"
+
+      - name: Restart Service on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST_T4G }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY_T4G }}
+          script: |
+            set -eu
+
+            NEW_SERVICE="helios-gateway"
+            test -s /home/ec2-user/certs/cert.pem
+            test -s /home/ec2-user/certs/key.pem
+            test -r /home/ec2-user/certs/cert.pem
+            test -r /home/ec2-user/certs/key.pem
+
+            sudo cp /home/ec2-user/helios-gateway/helios-gateway.service /etc/systemd/system/
+            sudo systemctl daemon-reload
+            sudo systemctl enable "$NEW_SERVICE"
+
+            sudo systemctl restart "$NEW_SERVICE"
+
+            HEALTHY="false"
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent --insecure https://127.0.0.1:9590/actuator/health | grep -q '"status":"UP"'; then
+                HEALTHY="true"
+                break
+              fi
+              sleep 2
+            done
+
+            if [ "$HEALTHY" != "true" ]; then
+              sudo journalctl -u "$NEW_SERVICE" -n 100 --no-pager || true
+              sudo systemctl stop "$NEW_SERVICE" || true
+              exit 1
+            fi
+
+            sudo systemctl status "$NEW_SERVICE" --no-pager

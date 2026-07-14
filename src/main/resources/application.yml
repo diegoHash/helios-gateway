@@ -1,0 +1,49 @@
+server:
+  port: 9590
+  ssl:
+    enabled: true
+    certificate: file:/home/ec2-user/certs/cert.pem
+    certificate-private-key: file:/home/ec2-user/certs/key.pem
+
+spring:
+  application:
+    name: helios-gateway
+  cloud:
+    gateway:
+
+      routes:
+        - id: helios_pulse_route
+          uri: ${HELIOS_PULSE_API_URI:http://127.0.0.1:9595}
+          predicates:
+            - Path=/helios/pulse/**
+          filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+
+        - id: helios_sentinel_route
+          uri: ${HELIOS_SENTINEL_API_URI:http://127.0.0.1:8080}
+          predicates:
+            - Path=/helios/sentinel/**
+          filters:
+            - RewritePath=/helios/sentinel/?(?<segment>.*), /$\{segment}
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+
+        - id: helios_super_admin_api_route
+          uri: ${HELIOS_SUPER_ADMIN_API_URI:http://127.0.0.1:9591}
+          predicates:
+            - Path=/helios/admin/**
+          filters:
+            - RewritePath=/helios/admin/?(?<segment>.*), /$\{segment}
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

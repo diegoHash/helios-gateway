@@ -1,0 +1,24 @@
+[Unit]
+Description=HELIOS Platform API Gateway
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/helios-gateway
+ExecStart=/usr/bin/java -jar /home/ec2-user/helios-gateway/helios-gateway.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
